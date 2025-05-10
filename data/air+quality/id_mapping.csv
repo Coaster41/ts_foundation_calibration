@@ -1,0 +1,14 @@
+,unique_id,mapped_id
+0,CO(GT),0
+1,PT08.S1(CO),1
+2,NMHC(GT),2
+3,C6H6(GT),3
+4,PT08.S2(NMHC),4
+5,NOx(GT),5
+6,PT08.S3(NOx),6
+7,NO2(GT),7
+8,PT08.S4(NO2),8
+9,PT08.S5(O3),9
+10,T,10
+11,RH,11
+12,AH,12
