@@ -1,25 +1,20 @@
+from collections import defaultdict
 import pandas as pd
 import numpy as np
+import timesfm
+import multiprocessing
+
 import torch
 import argparse
 import os
 import time
 from gluonts.dataset.pandas import PandasDataset
 from gluonts.dataset.split import split
+from gluonts.itertools import batcher
 
-from uni2ts.model.moirai import MoiraiForecast, MoiraiModule
-
-MODEL = "moirai"  # model name: choose from {'moirai', 'moirai-moe'}
-
-# SIZE = "small"  # model size: choose from {'small', 'base', 'large'}
-# PDT = 24  # prediction length: any positive integer
-# CTX = 200  # context length: any positive integer
 PSZ = "auto"  # patch size: choose from {"auto", 8, 16, 32, 64, 128}
 BSZ = 32  # batch size: any positive integer
 TEST = 100  # test set length: any positive integer
-
-
-
 
 
 if __name__ == "__main__":
@@ -59,6 +54,7 @@ if __name__ == "__main__":
     # df = pd.read_csv(args.dataset, index_col=False, parse_dates=['ds'])
     ds = PandasDataset.from_long_dataframe(df, target="y", item_id="unique_id", timestamp='ds')
     unit = ds.freq
+    freq_id = {"M":1, "W":1, "D":0, "h":0, "min":0, "s":0}[unit]
 
     
     if args.forecast_date == "":
@@ -77,41 +73,47 @@ if __name__ == "__main__":
         prediction_length=PDT,  # number of time steps for each prediction
         windows=total_forecast_length-PDT,  # number of windows in rolling window evaluation
         distance=1,  # number of time steps between each window - distance=PDT for non-overlapping windows
+        max_history=CTX,
     )
-    print(PDT, total_forecast_length-PDT)
+    print(total_forecast_length-PDT)
 
-    model = MoiraiForecast(
-        module=MoiraiModule.from_pretrained(f"Salesforce/moirai-1.1-R-small"),
-        prediction_length=PDT,
-        context_length=CTX,
-        patch_size=32,
-        num_samples=100,
-        target_dim=1,
-        feat_dynamic_real_dim=0,
-        past_feat_dynamic_real_dim=0,
+    # Load Model
+    tfm = timesfm.TimesFm(
+        hparams=timesfm.TimesFmHparams(
+            backend='gpu',
+            # per_core_batch_size=32,
+            context_len=CTX,  # currently max supported
+            horizon_len=PDT,  # number of steps to predict
+            input_patch_len=32,  # fixed parameters
+            output_patch_len=128,
+            num_layers=50,
+            model_dims=1280,
+            use_positional_embedding=False,
+            point_forecast_mode='mean'
+        ),
+        checkpoint=timesfm.TimesFmCheckpoint(
+            huggingface_repo_id="google/timesfm-2.0-500m-pytorch"),
     )
-    
-    predictor = model.create_predictor(batch_size=BSZ)
-    forecasts = predictor.predict(test_data.input)
 
-    input_it = iter(test_data.input)
-    label_it = iter(test_data.label)
-    forecast_it = iter(forecasts)
-
-
-    # print(len(forecast_it))
     mean_results = []
     median_results = []
     quantile_results = [[] for _ in quantiles]
     start_time = time.time()
-    for i, (input, label, forecast) in enumerate(zip(input_it, label_it, forecast_it)):
-        start_date = forecast.index[0] - pd.Timedelta(1, unit)
-        mean_results.append([forecast.item_id, start_date, *np.mean(forecast.samples, axis=0)])
-        median_results.append([forecast.item_id, start_date, *np.median(forecast.samples, axis=0)])
-        for i, quantile in enumerate(quantiles):
-            quantile_results[i].append([forecast.item_id, start_date, \
-                                        *np.quantile(forecast.samples, q=quantile/100, axis=0)])
-    print("done")
+    for batch in batcher(test_data.input, batch_size=BSZ):
+        context = [torch.tensor(entry["target"]) for entry in batch]
+        _, quantile_forecasts = tfm.forecast(context,
+                                            freq=[freq_id] * len(context))
+        for entry, forecasts in zip(batch, quantile_forecasts):
+            if id != entry["item_id"]:
+                id = entry["item_id"]
+                print(f"Run Time: {time.time()-start_time:.2f}, ID: {id}")
+            start_date = entry["start"] + pd.Timedelta(len(entry["target"])-1, unit)
+            mean_results.append([id, start_date, *forecasts[:,0]])
+            median_results.append([id, start_date, *forecasts[:,5]])
+            for i in range(len(quantiles)):
+                quantile_results[i].append([id, start_date, *forecasts[:,quantiles[i]//10]])
+
+    print('done')
 
     columns = ['unique_id', 'ds', *range(1,PDT+1)]
     mean_results = pd.DataFrame(mean_results, columns=columns)

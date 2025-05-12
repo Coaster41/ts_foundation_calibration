@@ -1,25 +1,20 @@
+from collections import defaultdict
 import pandas as pd
 import numpy as np
+from chronos import ChronosPipeline
+import multiprocessing
+
 import torch
 import argparse
 import os
 import time
 from gluonts.dataset.pandas import PandasDataset
 from gluonts.dataset.split import split
+from gluonts.itertools import batcher
 
-from uni2ts.model.moirai import MoiraiForecast, MoiraiModule
-
-MODEL = "moirai"  # model name: choose from {'moirai', 'moirai-moe'}
-
-# SIZE = "small"  # model size: choose from {'small', 'base', 'large'}
-# PDT = 24  # prediction length: any positive integer
-# CTX = 200  # context length: any positive integer
 PSZ = "auto"  # patch size: choose from {"auto", 8, 16, 32, 64, 128}
 BSZ = 32  # batch size: any positive integer
 TEST = 100  # test set length: any positive integer
-
-
-
 
 
 if __name__ == "__main__":
@@ -59,6 +54,7 @@ if __name__ == "__main__":
     # df = pd.read_csv(args.dataset, index_col=False, parse_dates=['ds'])
     ds = PandasDataset.from_long_dataframe(df, target="y", item_id="unique_id", timestamp='ds')
     unit = ds.freq
+    freq_id = {"M":1, "W":1, "D":0, "h":0, "min":0, "s":0}[unit]
 
     
     if args.forecast_date == "":
@@ -77,41 +73,40 @@ if __name__ == "__main__":
         prediction_length=PDT,  # number of time steps for each prediction
         windows=total_forecast_length-PDT,  # number of windows in rolling window evaluation
         distance=1,  # number of time steps between each window - distance=PDT for non-overlapping windows
+        max_history=CTX,
     )
-    print(PDT, total_forecast_length-PDT)
 
-    model = MoiraiForecast(
-        module=MoiraiModule.from_pretrained(f"Salesforce/moirai-1.1-R-small"),
-        prediction_length=PDT,
-        context_length=CTX,
-        patch_size=32,
-        num_samples=100,
-        target_dim=1,
-        feat_dynamic_real_dim=0,
-        past_feat_dynamic_real_dim=0,
+    # Load Model
+    pipeline = ChronosPipeline.from_pretrained(
+        "amazon/chronos-t5-small",
+        device_map="cuda",
+        torch_dtype=torch.bfloat16,
     )
-    
-    predictor = model.create_predictor(batch_size=BSZ)
-    forecasts = predictor.predict(test_data.input)
 
-    input_it = iter(test_data.input)
-    label_it = iter(test_data.label)
-    forecast_it = iter(forecasts)
-
-
-    # print(len(forecast_it))
     mean_results = []
     median_results = []
     quantile_results = [[] for _ in quantiles]
     start_time = time.time()
-    for i, (input, label, forecast) in enumerate(zip(input_it, label_it, forecast_it)):
-        start_date = forecast.index[0] - pd.Timedelta(1, unit)
-        mean_results.append([forecast.item_id, start_date, *np.mean(forecast.samples, axis=0)])
-        median_results.append([forecast.item_id, start_date, *np.median(forecast.samples, axis=0)])
-        for i, quantile in enumerate(quantiles):
-            quantile_results[i].append([forecast.item_id, start_date, \
-                                        *np.quantile(forecast.samples, q=quantile/100, axis=0)])
-    print("done")
+    for batch in batcher(test_data.input, batch_size=BSZ):
+        context = [torch.tensor(entry["target"]) for entry in batch]
+        quantile_forecasts, mean_forecasts = pipeline.predict_quantiles(
+            context=context,
+            prediction_length=PDT,
+            quantile_levels=[0.5, *(np.array(quantiles)/100)],
+        )
+        mean_forecasts = mean_forecasts.detach().cpu().numpy()
+        quantile_forecasts = quantile_forecasts.detach().cpu().numpy()
+        for entry, quantile_forecast, mean_forecast in zip(batch, quantile_forecasts, mean_forecasts):
+            if id != entry["item_id"]:
+                id = entry["item_id"]
+                print(f"Run Time: {time.time()-start_time:.2f}, ID: {id}")
+            start_date = entry["start"] + pd.Timedelta(len(entry["target"])-1, unit)
+            mean_results.append([id, start_date, *mean_forecast])
+            median_results.append([id, start_date, *quantile_forecast[:,0]])
+            for i in range(len(quantiles)):
+                quantile_results[i].append([id, start_date, *quantile_forecast[:,i]])
+
+    print('done')
 
     columns = ['unique_id', 'ds', *range(1,PDT+1)]
     mean_results = pd.DataFrame(mean_results, columns=columns)
