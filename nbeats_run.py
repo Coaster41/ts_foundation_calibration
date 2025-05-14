@@ -113,7 +113,7 @@ if __name__ == "__main__":
     forecast_cols = ["NBEATS", "NBEATS-median",  \
                         *[f"NBEATS-lo-{quantile}" for quantile in quantiles[len(quantiles)//2:]], \
                         *[f"NBEATS-hi-{quantile}" for quantile in quantiles[len(quantiles)//2:]]]
-    file_names = ["mean", "median", \
+    file_names = ["mean_preds", "median_preds", \
                         *[f"quantile_{100-quantile}_preds" for quantile in quantiles[len(quantiles)//2:]], \
                         *[f"quantile_{quantile}_preds" for quantile in quantiles[len(quantiles)//2:]]] 
     model_results = defaultdict(list)
