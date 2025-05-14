@@ -1,0 +1,5 @@
+data/*
+lightning_logs/*
+model_ckpts/*
+slurm/*
+*.pyc

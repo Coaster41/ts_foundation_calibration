@@ -70,30 +70,26 @@ if __name__ == "__main__":
     df = pd.read_csv(args.dataset, index_col=0, parse_dates=['ds'])    
     # df = pd.read_csv(args.dataset, index_col=False, parse_dates=['ds'])
     ds = PandasDataset.from_long_dataframe(df, target="y", item_id="unique_id", timestamp='ds')
-    unit = ds.freq
-    freq_id = {"M":1, "W":1, "D":0, "h":0, "min":0, "s":0}[unit]
+    freq = ds.freq
+    unit = ''.join(char for char in freq if not char.isdigit())
+    print(f'freq: {freq}, unit: {unit}')
+    unit_str = "".join(filter(str.isdigit, freq))
+    if unit_str == "":
+        unit_num = 1
+    else:
+        unit_num = int("".join(unit_str))
+    freq_delta = pd.Timedelta(unit_num, unit)
 
     
     if args.forecast_date == "":
-        forecast_date = min(df['ds']) + pd.Timedelta(CTX, unit=unit)
+        forecast_date = min(df['ds']) + CTX * freq_delta
     else:
         forecast_date = pd.Timestamp(args.forecast_date)
     end_date = max(df['ds'])
-    total_forecast_length = (end_date-forecast_date) // pd.Timedelta(1, unit=unit)
+    total_forecast_length = (end_date-forecast_date) // freq_delta
 
     train_df = df.loc[df['ds'] <= forecast_date]
-    test_df = df.loc[df['ds'] > forecast_date].reset_index(drop=True)
-    train_dataset, test_template = split(
-        ds, date=pd.Period(forecast_date, freq=unit)
-    )
-
-    # Construct rolling window evaluation
-    test_data = test_template.generate_instances(
-        prediction_length=PDT,  # number of time steps for each prediction
-        windows=total_forecast_length-PDT,  # number of windows in rolling window evaluation
-        distance=1,  # number of time steps between each window - distance=PDT for non-overlapping windows
-        max_history=CTX,
-    )
+    # test_df = df.loc[df['ds'] > forecast_date].reset_index(drop=True)
 
     # Load Model
     model = NBEATS(h=PDT, input_size=CTX,
@@ -107,7 +103,7 @@ if __name__ == "__main__":
     model.trainer_kwargs['enable_progress_bar'] = False
     fcst = NeuralForecast(
         models=[model],
-        freq=unit
+        freq=freq
     )
     
     start_time = time.time()
@@ -130,6 +126,7 @@ if __name__ == "__main__":
                                                                 index=forecast_result.index)
             forecast_result.drop(columns=[forecast_col], inplace=True)
             forecast_result.insert(0, 'ds', last_observed)
+            forecast_result = forecast_result.reset_index(drop=False)
             model_results[file_name].append(forecast_result)
     
     for file_name in file_names:
