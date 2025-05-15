@@ -52,7 +52,7 @@ def tce(lower_df, upper_df, data_df, freq_delta, confidence):
 
 def wql(quantiles_dict, data_df, freq_delta):
     '''
-    returns: weighted quantile loss, (n_quantiles, pred_length) WQL array
+    returns: weighted quantile loss, (pred_length) WQL array
     '''
     ql_arr = []
     for quantile, quantile_df in quantiles_dict.items():
@@ -69,7 +69,7 @@ def wql(quantiles_dict, data_df, freq_delta):
 
     scale = np.sum(merged_results['y'])
     wql_arr = np.array(ql_arr) / scale
-    return np.sum(wql_arr), wql_arr
+    return np.sum(wql_arr), np.mean(wql_arr, axis=0)
 
 
 def msis(lower_df, upper_df, data_df, freq_delta, confidence):    
