@@ -3,3 +3,4 @@ lightning_logs/*
 model_ckpts/*
 slurm/*
 *.pyc
+model_results/*/*
