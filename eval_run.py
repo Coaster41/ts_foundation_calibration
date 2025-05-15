@@ -53,7 +53,7 @@ if __name__ == "__main__":
             wql_avg, wql_arr = wql(quantiles_dict, data_df, freq_delta)
             results.append([dataset, model, 'wql', wql_avg, *wql_arr])
             msis_avg, msis_arr = msis(lower_df, upper_df, data_df, freq_delta, confidence)
-            results.append([dataset, model, 'msis', msis_avg, *tce_arr])
+            results.append([dataset, model, 'msis', msis_avg, *msis_arr])
     df = pd.DataFrame(results, columns=['dataset', 'model', 'metric', 'avg_result', *[str(h) for h in range(1,49)]])
     df.to_csv('model_results/metric_results.csv')
 
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     #             wql_arr.append(wql_avg)
     #         results.append([dataset, model, 'mase', *mase_arr])
     #         results.append([dataset, model, 'tce', *tce_arr])
-    #         results.append([dataset, model, 'msis', *tce_arr])
+    #         results.append([dataset, model, 'msis', *msis_arr])
     #         results.append([dataset, model, 'wql', *wql_arr])
     # df = pd.DataFrame(results, columns=['dataset', 'model', 'metric', *[str(h) for h in range(1,max_ids+1)]])
     # df.to_csv('model_results/metric_results_unique_id.csv')

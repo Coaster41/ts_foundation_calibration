@@ -11,7 +11,7 @@ def mae(results_df, data_df, freq_delta):
         merged_results = pd.merge(data_df, shift_results, on=['unique_id', 'ds'], how='inner')
         mean_abs_error = np.mean(np.abs(merged_results['y'] - merged_results[str(h)]))
         mae_arr.append(mean_abs_error)
-    return np.mean(mae_arr), mae_arr
+    return np.mean(mae_arr), np.array(mae_arr)
 
 
 def mase(results_df, data_df, freq_delta):
@@ -26,7 +26,7 @@ def mase(results_df, data_df, freq_delta):
     
     # naive mae
     shift_results = data_df.copy()
-    shift_results.loc[:, 'ds'] -= freq_delta
+    shift_results.loc[:, 'ds'] += freq_delta
     shift_results = shift_results.rename(columns={"y": "1"})
     merged_results = pd.merge(data_df, shift_results, on=['unique_id', 'ds'], how='inner')
     mae_n = np.mean(np.abs(merged_results['y'] - merged_results["1"]))
@@ -62,14 +62,14 @@ def wql(quantiles_dict, data_df, freq_delta):
             shift_results = quantile_df[['ds', 'unique_id', str(h)]]
             shift_results.loc[:,'ds'] += freq_delta * h
             merged_results = pd.merge(data_df, shift_results, on=['unique_id', 'ds'], how='inner')
-            quantile_loss = np.mean((2*(1-quantile)*(merged_results[str(h)] - merged_results['y'])*(merged_results[str(h)] >= merged_results['y'])) \
+            quantile_loss = np.sum((2*(1-quantile)*(merged_results[str(h)] - merged_results['y'])*(merged_results[str(h)] >= merged_results['y'])) \
                             + (2*(quantile)*(merged_results['y'] - merged_results[str(h)])*(merged_results[str(h)] < merged_results['y'])))
             quantile_ql_arr.append(quantile_loss)
         ql_arr.append(quantile_ql_arr)
 
     scale = np.sum(merged_results['y'])
     wql_arr = np.array(ql_arr) / scale
-    return np.sum(wql_arr), np.mean(wql_arr, axis=0)
+    return np.sum(wql_arr), np.sum(wql_arr, axis=0)
 
 
 def msis(lower_df, upper_df, data_df, freq_delta, confidence):    
@@ -89,7 +89,7 @@ def msis(lower_df, upper_df, data_df, freq_delta, confidence):
     
     # naive mae
     shift_results = data_df.copy()
-    shift_results.loc[:, 'ds'] -= freq_delta
+    shift_results.loc[:, 'ds'] += freq_delta
     shift_results = shift_results.rename(columns={"y": "1"})
     merged_results = pd.merge(data_df, shift_results, on=['unique_id', 'ds'], how='inner')
     mae_n = np.mean(np.abs(merged_results['y'] - merged_results["1"]))

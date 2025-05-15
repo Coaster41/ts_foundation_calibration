@@ -117,7 +117,9 @@ if __name__ == "__main__":
                         *[f"quantile_{100-quantile}_preds" for quantile in quantiles[len(quantiles)//2:]], \
                         *[f"quantile_{quantile}_preds" for quantile in quantiles[len(quantiles)//2:]]] 
     model_results = defaultdict(list)
-    for last_observed in pd.date_range(start=args.forecast_date, end=end_date):
+    for i, last_observed in enumerate(pd.date_range(start=args.forecast_date, end=end_date, freq=freq)):
+        if i%100 == 0:
+            print(f"Run Time: {time.time()-start_time:.2f}, date: {last_observed}")
         forecast_df = fcst.predict(df=(df.loc[df['ds']<=last_observed]))
         for forecast_col, file_name in zip(forecast_cols, file_names):
             forecast_result = pd.DataFrame(forecast_df[['unique_id', forecast_col]].groupby('unique_id')[forecast_col].agg(list), 
