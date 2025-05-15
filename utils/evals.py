@@ -83,8 +83,8 @@ def msis(lower_df, upper_df, data_df, freq_delta, confidence):
         merged_upper = pd.merge(data_df, shift_upper, on=['unique_id', 'ds'], how='inner')
         merged_lower = pd.merge(data_df, shift_lower, on=['unique_id', 'ds'], how='inner')
         mean_interval_score = np.mean( (merged_upper[str(h)] - merged_lower[str(h)]) \
-                                      + confidence * (merged_lower[str(h)] - merged_lower['y']) * (merged_lower['y'] < merged_lower[str(h)]) \
-                                      + confidence * (merged_upper['y'] - merged_upper[str(h)]) * (merged_upper['y'] > merged_upper[str(h)]) )
+                                      + 2/(1-confidence) * (merged_lower[str(h)] - merged_lower['y']) * (merged_lower['y'] < merged_lower[str(h)]) \
+                                      + 2/(1-confidence) * (merged_upper['y'] - merged_upper[str(h)]) * (merged_upper['y'] > merged_upper[str(h)]) )
         mis_arr.append(mean_interval_score)
     
     # naive mae
@@ -95,3 +95,14 @@ def msis(lower_df, upper_df, data_df, freq_delta, confidence):
     mae_n = np.mean(np.abs(merged_results['y'] - merged_results["1"]))
 
     return np.mean(mis_arr) / mae_n, np.array(mis_arr) / mae_n
+
+def mean_interval_size(lower_df, upper_df, data_df, freq_delta, confidence):    
+    pred_length = int(lower_df.columns[-1])
+    mis_arr = []
+    for h in range(1,pred_length+1):
+        mis = np.mean((upper_df[str(h)] - lower_df[str(h)]))
+        mis_arr.append(mis)
+    
+    # naive mae
+    scale = np.mean(pd.merge(data_df, upper_df, on=['unique_id', 'ds'], how='inner')['y'])
+    return np.mean(mis_arr) / scale, np.array(mis_arr) / scale
