@@ -47,8 +47,22 @@ def tce(lower_df, upper_df, data_df, freq_delta, confidence):
         mean_upper_outside = np.mean(merged_upper['y'] > merged_upper[str(h)])
         mean_lower_outside = np.mean(merged_lower['y'] < merged_lower[str(h)])
         tce_arr.append(abs(outside_ratio - mean_upper_outside) + abs(outside_ratio - mean_lower_outside))
-    return np.mean(tce_arr), np.array(tce_arr)
+    return np.mean(tce_arr)/2, np.array(tce_arr)/2
 
+def pce(quantiles_dict, data_df, freq_delta):    
+    pce_arr = []
+    for quantile, quantile_df in quantiles_dict.items():
+        pred_length = int(quantile_df.columns[-1])
+        ce_arr = []
+        for h in range(1,pred_length+1):
+            shift_quantile = quantile_df[['ds', 'unique_id', str(h)]]
+            shift_quantile.loc[:,'ds'] += freq_delta * h
+            merged_quantile = pd.merge(data_df, shift_quantile, on=['unique_id', 'ds'], how='inner')
+            mean_quantile_inside = np.mean(merged_quantile['y'] <= merged_quantile[str(h)])
+            ce_arr.append(abs(quantile - mean_quantile_inside))
+        pce_arr.append(ce_arr)
+    pce_arr = np.mean(pce_arr, axis=0)
+    return np.mean(pce_arr), pce_arr
 
 def wql(quantiles_dict, data_df, freq_delta):
     '''
@@ -96,7 +110,8 @@ def msis(lower_df, upper_df, data_df, freq_delta, confidence):
 
     return np.mean(mis_arr) / mae_n, np.array(mis_arr) / mae_n
 
-def mean_interval_size(lower_df, upper_df, data_df, freq_delta, confidence):    
+def msiw(lower_df, upper_df, data_df):
+    # mean scaled interval width 
     pred_length = int(lower_df.columns[-1])
     mis_arr = []
     for h in range(1,pred_length+1):
@@ -106,3 +121,30 @@ def mean_interval_size(lower_df, upper_df, data_df, freq_delta, confidence):
     # naive mae
     scale = np.mean(pd.merge(data_df, upper_df, on=['unique_id', 'ds'], how='inner')['y'])
     return np.mean(mis_arr) / scale, np.array(mis_arr) / scale
+
+def mpiqr_mean(quantiles_dict, data_df, confidences):
+    pred_length = int(quantiles_dict[0.5].columns[-1])
+    merged_results = pd.merge(data_df, quantiles_dict[0.5][['ds', 'unique_id', '1']], on=['unique_id', 'ds'], how='inner')
+    mpiqr_arr = []
+    h = [str(i) for i in range(1,pred_length+1)]
+    for confidence in confidences:
+        if confidence == 0:
+            continue
+        upper_df = quantiles_dict[round(0.5 + confidence/2, 1)]
+        lower_df = quantiles_dict[round(0.5 - confidence/2, 1)]
+        iqr = upper_df[h] - lower_df[h]
+        iqr /= (np.quantile(merged_results['y'], q=round(0.5 + confidence/2, 1)) \
+                - np.quantile(merged_results['y'], q=round(0.5 - confidence/2, 1)))
+        mpiqr_arr.append(np.mean(iqr, axis=0))
+    return np.mean(mpiqr_arr), np.mean(mpiqr_arr, axis=0)
+
+
+def mpiqr(lower_df, upper_df, data_df, confidence):
+    pred_length = int(upper_df.columns[-1])
+    merged_results = pd.merge(data_df, upper_df[['ds', 'unique_id', '1']], on=['unique_id', 'ds'], how='inner')
+    h = [str(i) for i in range(1,pred_length+1)]
+    iqr = upper_df[h] - lower_df[h]
+    iqr /= (np.quantile(merged_results['y'], q=round(0.5 + confidence/2, 1)) \
+            - np.quantile(merged_results['y'], q=round(0.5 - confidence/2, 1)))
+    mpiqr_arr = np.mean(iqr, axis=0)
+    return np.mean(mpiqr_arr), mpiqr_arr

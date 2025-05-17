@@ -47,7 +47,7 @@ def run_model(test_data, quantiles, pred_length, unit, freq, freq_delta, save_di
             mean_results.append([id, start_date, *mean_forecast])
             median_results.append([id, start_date, *quantile_forecast[:,0]])
             for i in range(len(quantiles)):
-                quantile_results[i].append([id, start_date, *quantile_forecast[:,i]])
+                quantile_results[i].append([id, start_date, *quantile_forecast[:,i+1]])
 
     print('done')
 
