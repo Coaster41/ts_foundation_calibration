@@ -34,39 +34,41 @@ def load_results(dataset, model):
 
 if __name__ == "__main__":
     datasets = ["amazon-google", "m5", "glucose", "meditation"]
-    models = ["timesfm", "moirai", "chronos", "lag-llama", "nbeats", "autoarima"]
+    # models = ["timesfm", "moirai", "chronos", "lag-llama", "nbeats", "autoarima"]
+    models = ["lag-llama-context", "nbeats-context"]
     results = []
-    confidence = 0.8
+    # confidence = 0.8
     confidences = [0.8, 0.6, 0.4, 0.2, 0]
     start_time = time.time()
     max_ids = 0
 
-    # for dataset in datasets:
-    #     for model in models:
-    #         print(f"Time: {time.time()-start_time:.4f}\t{dataset} {model}")
-    #         data_df, results_df, freq_delta, quantiles_dict = load_results(dataset, model)
-    #         mase_avg, mase_arr = mase(results_df, data_df, freq_delta)
-    #         results.append([dataset, model, 'mase', mase_avg, *mase_arr])
-    #         wql_avg, wql_arr = wql(quantiles_dict, data_df, freq_delta)
-    #         results.append([dataset, model, 'wql', wql_avg, *wql_arr])
-    #         pce_avg, pce_arr = pce(quantiles_dict, data_df, freq_delta)
-    #         results.append([dataset, model, 'pce', pce_avg, *pce_arr])
-    #         mpiqr_avg, mpiqr_arr = mpiqr_mean(quantiles_dict, data_df, confidences)
-    #         results.append([dataset, model, 'mpiqr', mpiqr_avg, *mpiqr_arr])
-    #         for confidence in confidences:
-    #             upper_df = quantiles_dict[round(0.5 + confidence/2, 1)]
-    #             lower_df = quantiles_dict[round(0.5 - confidence/2, 1)]
-    #             tce_avg, tce_arr = tce(lower_df, upper_df, data_df, freq_delta, confidence)
-    #             results.append([dataset, model, f'tce_{round(confidence*100)}', tce_avg, *tce_arr])
-    #             msiw_avg, msiw_arr = msiw(lower_df, upper_df, data_df)
-    #             results.append([dataset, model, f'msiw_{round(confidence*100)}', msiw_avg, *msiw_arr])
-    #             msis_avg, msis_arr = msis(lower_df, upper_df, data_df, freq_delta, confidence)
-    #             results.append([dataset, model, f'msis_{round(confidence*100)}', msis_avg, *msis_arr])
-    #             mpiqr_avg, mpiqr_arr = mpiqr(lower_df, upper_df, data_df, confidence)
-    #             results.append([dataset, model, f'mpiqr_{round(confidence*100)}', mpiqr_avg, *mpiqr_arr])
-    #         df = pd.DataFrame(results, columns=['dataset', 'model', 'metric', 'avg_result', *[str(h) for h in range(1,49)]])
-    #         df.to_csv('model_results/metric_results_test1.csv')
-    # df = pd.DataFrame(results, columns=['dataset', 'model', 'metric', 'avg_result', *[str(h) for h in range(1,49)]])
+    for dataset in datasets:
+        for model in models:
+            print(f"Time: {time.time()-start_time:.4f}\t{dataset} {model}")
+            data_df, results_df, freq_delta, quantiles_dict = load_results(dataset, model)
+            mase_avg, mase_arr = mase(results_df, data_df, freq_delta)
+            results.append([dataset, model, 'mase', mase_avg, *mase_arr])
+            wql_avg, wql_arr = wql(quantiles_dict, data_df, freq_delta)
+            results.append([dataset, model, 'wql', wql_avg, *wql_arr])
+            pce_avg, pce_arr = pce(quantiles_dict, data_df, freq_delta)
+            results.append([dataset, model, 'pce', pce_avg, *pce_arr])
+            mpiqr_avg, mpiqr_arr = mpiqr_mean(quantiles_dict, data_df, confidences)
+            results.append([dataset, model, 'mpiqr', mpiqr_avg, *mpiqr_arr])
+            for confidence in confidences:
+                upper_df = quantiles_dict[round(0.5 + confidence/2, 1)]
+                lower_df = quantiles_dict[round(0.5 - confidence/2, 1)]
+                tce_avg, tce_arr = tce(lower_df, upper_df, data_df, freq_delta, confidence)
+                results.append([dataset, model, f'tce_{round(confidence*100)}', tce_avg, *tce_arr])
+                msiw_avg, msiw_arr = msiw(lower_df, upper_df, data_df)
+                results.append([dataset, model, f'msiw_{round(confidence*100)}', msiw_avg, *msiw_arr])
+                msis_avg, msis_arr = msis(lower_df, upper_df, data_df, freq_delta, confidence)
+                results.append([dataset, model, f'msis_{round(confidence*100)}', msis_avg, *msis_arr])
+                mpiqr_avg, mpiqr_arr = mpiqr(lower_df, upper_df, data_df, confidence)
+                results.append([dataset, model, f'mpiqr_{round(confidence*100)}', mpiqr_avg, *mpiqr_arr])
+            df = pd.DataFrame(results, columns=['dataset', 'model', 'metric', 'avg_result', *[str(h) for h in range(1,49)]])
+            df.index += 576
+            df.to_csv('model_results/metric_results_test1.csv')
+    df = pd.DataFrame(results, columns=['dataset', 'model', 'metric', 'avg_result', *[str(h) for h in range(1,49)]])
     # df.to_csv('model_results/metric_results.csv')
 
     # groupby unique_id
@@ -122,6 +124,7 @@ if __name__ == "__main__":
             results.extend([[dataset, model, f'msiw_{round(confidence*100)}', *msiw_arr[i]] for i, confidence in enumerate(confidences)])
             results.extend([[dataset, model, f'mpiqr_{round(confidence*100)}', *mpiqr_arr[i]] for i, confidence in enumerate(confidences)])
             df = pd.DataFrame(results, columns=['dataset', 'model', 'metric', *[str(h) for h in range(1,max_ids+1)]])
+            df.index += 576
             df.to_csv('model_results/metric_results_unique_id_test1.csv')
     df = pd.DataFrame(results, columns=['dataset', 'model', 'metric', *[str(h) for h in range(1,max_ids+1)]])
-    df.to_csv('model_results/metric_results_unique_id.csv')
+    # df.to_csv('model_results/metric_results_unique_id.csv')
