@@ -147,4 +147,35 @@ def mpiqr(lower_df, upper_df, data_df, confidence):
     iqr /= (np.quantile(merged_results['y'], q=round(0.5 + confidence/2, 1)) \
             - np.quantile(merged_results['y'], q=round(0.5 - confidence/2, 1)))
     mpiqr_arr = np.mean(iqr, axis=0)
-    return np.mean(mpiqr_arr), mpiqr_arr
+    return np.mean(mpiqr_arr), mpiqr_arr.to_numpy().flatten()
+
+def cce(lower_df, upper_df, data_df, freq_delta, confidence):    
+    pred_length = int(lower_df.columns[-1])
+    cce_arr = []
+    for h in range(1,pred_length+1):
+        shift_lower = lower_df[['ds', 'unique_id', str(h)]]
+        shift_lower.loc[:,'ds'] += freq_delta * h
+        shift_upper = upper_df[['ds', 'unique_id', str(h)]]
+        shift_upper.loc[:,'ds'] += freq_delta * h
+        merged_upper = pd.merge(data_df, shift_upper, on=['unique_id', 'ds'], how='inner')
+        merged_lower = pd.merge(data_df, shift_lower, on=['unique_id', 'ds'], how='inner')
+        middle = (merged_upper['y'] <= merged_upper[str(h)]) & (merged_lower['y'] >= merged_lower[str(h)])
+        mean_middle = np.mean(middle)
+        cce_arr.append(confidence - mean_middle)
+    return np.mean(cce_arr), np.array(cce_arr)
+
+def stce(quantile_df, data_df, freq_delta, quantile):
+    pred_length = int(quantile_df.columns[-1])
+    # outside_ratio = (1-confidence)/2
+    tce_arr = []
+    for h in range(1,pred_length+1):
+        shift_quantile = quantile_df[['ds', 'unique_id', str(h)]]
+        shift_quantile.loc[:,'ds'] += freq_delta * h
+        merged_quantile = pd.merge(data_df, shift_quantile, on=['unique_id', 'ds'], how='inner')
+        if quantile >= 0.5:
+            mean_quantile_outside = np.mean(merged_quantile['y'] > merged_quantile[str(h)])
+            tce_arr.append(mean_quantile_outside - (1-quantile)) # over confidence: outside is greater
+        else:
+            mean_quantile_outside = np.mean(merged_quantile['y'] < merged_quantile[str(h)])
+            tce_arr.append(mean_quantile_outside - (quantile)) # over confidence: outside is greater
+    return np.mean(tce_arr), np.array(tce_arr)

@@ -17,12 +17,8 @@ PSZ = "auto"  # patch size: choose from {"auto", 8, 16, 32, 64, 128}
 BSZ = 32  # batch size: any positive integer
 TEST = 100  # test set length: any positive integer
 
-
-def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, CTX):
-    freq_id = {"M":1, "W":1, "D":0, "h":0, "min":0, "s":0, 'T':0, 'S':0, 'H':0}[unit]
-
-    # Load Model
-    tfm = timesfm.TimesFm(
+def load_model(PDT,CTX):
+    return timesfm.TimesFm(
         hparams=timesfm.TimesFmHparams(
             backend='gpu',
             # per_core_batch_size=32,
@@ -39,6 +35,28 @@ def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, CTX):
             huggingface_repo_id="google/timesfm-2.0-500m-pytorch"),
     )
 
+def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, CTX, tfm=None):
+    freq_id = {"M":1, "W":1, "D":0, "h":0, "min":0, "s":0, 'T':0, 'S':0, 'H':0}[unit]
+
+    # Load Model
+    if tfm == None:
+        tfm = timesfm.TimesFm(
+            hparams=timesfm.TimesFmHparams(
+                backend='gpu',
+                # per_core_batch_size=32,
+                context_len=CTX,  # currently max supported
+                horizon_len=PDT,  # number of steps to predict
+                input_patch_len=32,  # fixed parameters
+                output_patch_len=128,
+                num_layers=50,
+                model_dims=1280,
+                use_positional_embedding=False,
+                point_forecast_mode='mean'
+            ),
+            checkpoint=timesfm.TimesFmCheckpoint(
+                huggingface_repo_id="google/timesfm-2.0-500m-pytorch"),
+        )
+
     mean_results = []
     median_results = []
     quantile_results = [[] for _ in quantiles]
@@ -52,13 +70,13 @@ def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, CTX):
             if id != entry["item_id"]:
                 id = entry["item_id"]
                 print(f"Run Time: {time.time()-start_time:.2f}, ID: {id}")
-            start_date = entry["start"] + freq_delta * (len(entry["target"])-1)
+            start_date = entry["start"] + (len(entry["target"])-1)
             mean_results.append([id, start_date, *forecasts[:,0]])
             median_results.append([id, start_date, *forecasts[:,5]])
             for i in range(len(quantiles)):
                 quantile_results[i].append([id, start_date, *forecasts[:,quantiles[i]//10]])
 
-    print('done')
+    print(f'done: {time.time()-start_time:.2f}')
 
     os.makedirs(save_dir, exist_ok=True)
     columns = ['unique_id', 'ds', *range(1,PDT+1)]

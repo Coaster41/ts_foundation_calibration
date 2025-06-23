@@ -19,9 +19,9 @@ PSZ = "auto"  # patch size: choose from {"auto", 8, 16, 32, 64, 128}
 BSZ = 32  # batch size: any positive integer
 TEST = 100  # test set length: any positive integer
 
-def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, CTX):
 
-    model = MoiraiForecast(
+def load_model(PDT, CTX):
+    return MoiraiForecast(
         module=MoiraiModule.from_pretrained(f"Salesforce/moirai-1.1-R-small"),
         prediction_length=PDT,
         context_length=CTX,
@@ -31,7 +31,21 @@ def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, CTX):
         feat_dynamic_real_dim=0,
         past_feat_dynamic_real_dim=0,
     )
-    
+
+def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, CTX, model=None):
+
+    if model == None:
+        model = MoiraiForecast(
+            module=MoiraiModule.from_pretrained(f"Salesforce/moirai-1.1-R-small"),
+            prediction_length=PDT,
+            context_length=CTX,
+            patch_size=32,
+            num_samples=100,
+            target_dim=1,
+            feat_dynamic_real_dim=0,
+            past_feat_dynamic_real_dim=0,
+        )
+
     predictor = model.create_predictor(batch_size=BSZ)
     forecasts = predictor.predict(test_data.input)
 
@@ -46,13 +60,13 @@ def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, CTX):
     quantile_results = [[] for _ in quantiles]
     start_time = time.time()
     for i, (input, label, forecast) in enumerate(zip(input_it, label_it, forecast_it)):
-        start_date = forecast.index[0] - freq_delta
+        start_date = forecast.index[0] - 1
         mean_results.append([forecast.item_id, start_date, *np.mean(forecast.samples, axis=0)])
         median_results.append([forecast.item_id, start_date, *np.median(forecast.samples, axis=0)])
         for i, quantile in enumerate(quantiles):
             quantile_results[i].append([forecast.item_id, start_date, \
                                         *np.quantile(forecast.samples, q=quantile/100, axis=0)])
-    print("done")
+    print(f"done: {time.time()-start_time}")
     os.makedirs(save_dir, exist_ok=True)
 
     columns = ['unique_id', 'ds', *range(1,PDT+1)]

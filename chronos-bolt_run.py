@@ -1,7 +1,7 @@
 from collections import defaultdict
 import pandas as pd
 import numpy as np
-from chronos import ChronosPipeline
+from chronos import ChronosBoltPipeline
 import multiprocessing
 
 import torch
@@ -18,8 +18,8 @@ BSZ = 32  # batch size: any positive integer
 TEST = 100  # test set length: any positive integer
 
 def load_model():
-    return ChronosPipeline.from_pretrained(
-        "amazon/chronos-t5-small",
+    return ChronosBoltPipeline.from_pretrained(
+        "amazon/chronos-bolt-small",
         device_map="cuda",
         torch_dtype=torch.bfloat16,
     )
@@ -27,8 +27,8 @@ def load_model():
 
 def run_model(test_data, quantiles, pred_length, unit, freq, freq_delta, save_dir, pipeline=None):    
     if pipeline == None:
-        pipeline = ChronosPipeline.from_pretrained(
-            "amazon/chronos-t5-small",
+        pipeline = ChronosBoltPipeline.from_pretrained(
+            "amazon/chronos-bolt-small",
             device_map="cuda",
             torch_dtype=torch.bfloat16,
         )
@@ -136,7 +136,7 @@ if __name__ == "__main__":
 #     )
 
 #     # Load Model
-#     pipeline = ChronosPipeline.from_pretrained(
+#     pipeline = ChronosBoltPipeline.from_pretrained(
 #         "amazon/chronos-t5-small",
 #         device_map="cuda",
 #         torch_dtype=torch.bfloat16,

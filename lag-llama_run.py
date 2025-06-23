@@ -25,9 +25,7 @@ TEST = 100  # test set length: any positive integer
 num_samples = 100
 
 
-def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, ckpt_path, CTX): 
-    # gpu_num = (os.environ.get("SLURM_JOB_GPUS") or os.environ.get("SLURM_STEP_GPUS"))
-    # print(f"gpu_num: {gpu_num}")
+def load_model(PDT, CTX, ckpt_path="model_ckpts/lag-llama.ckpt"):
     gpu_num = 0
     device = torch.device(f"cuda:{gpu_num}") if torch.cuda.is_available() else torch.device('cpu')
     # Load Model
@@ -39,7 +37,7 @@ def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, ckpt_
         "factor": max(1.0, (CTX + PDT) / estimator_args["context_length"]),
     }
 
-    estimator = LagLlamaEstimator(
+    return LagLlamaEstimator(
         ckpt_path=ckpt_path,
         prediction_length=PDT,
         context_length=CTX, # Lag-Llama was trained with a context length of 32, but can work with any context length
@@ -57,6 +55,38 @@ def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, ckpt_
         num_parallel_samples=100,
         device=device,
     )
+def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, ckpt_path, CTX, estimator=None): 
+    if estimator == None:
+        gpu_num = 0
+        device = torch.device(f"cuda:{gpu_num}") if torch.cuda.is_available() else torch.device('cpu')
+        # Load Model
+        ckpt = torch.load(ckpt_path, map_location=device, weights_only=False) # Uses GPU since in this Colab we use a GPU.
+        estimator_args = ckpt["hyper_parameters"]["model_kwargs"]
+
+        rope_scaling_arguments = {
+            "type": "linear",
+            "factor": max(1.0, (CTX + PDT) / estimator_args["context_length"]),
+        }
+
+        estimator = LagLlamaEstimator(
+            ckpt_path=ckpt_path,
+            prediction_length=PDT,
+            context_length=CTX, # Lag-Llama was trained with a context length of 32, but can work with any context length
+
+            # estimator args
+            input_size=estimator_args["input_size"],
+            n_layer=estimator_args["n_layer"],
+            n_embd_per_head=estimator_args["n_embd_per_head"],
+            n_head=estimator_args["n_head"],
+            scaling=estimator_args["scaling"],
+            time_feat=estimator_args["time_feat"],
+            rope_scaling=None, # ???
+
+            batch_size=BSZ,
+            num_parallel_samples=100,
+            device=device,
+        )
+
     lightning_module = estimator.create_lightning_module()
     transformation = estimator.create_transformation()
     predictor = estimator.create_predictor(transformation, lightning_module)
@@ -68,7 +98,7 @@ def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, ckpt_
     quantile_results = [[] for _ in quantiles]
     start_time = time.time()
     for i, (forecast) in enumerate(forecast_it):
-        start_date = forecast.index[0] - freq_delta
+        start_date = forecast.index[0] - 1
         print(f"time: {time.time()-start_time:.2f} date: {start_date} id: {forecast.item_id}")
         mean_results.append([forecast.item_id, start_date, *np.mean(forecast.samples, axis=0)])
         median_results.append([forecast.item_id, start_date, *np.median(forecast.samples, axis=0)])
@@ -76,7 +106,7 @@ def run_model(test_data, quantiles, PDT, unit, freq, freq_delta, save_dir, ckpt_
             quantile_results[i].append([forecast.item_id, start_date, \
                                         *np.quantile(forecast.samples, q=quantile/100, axis=0)])
 
-    print('done')
+    print(f'Done in {time.time()-start_time:.2f}')
 
     os.makedirs(args.save_dir, exist_ok=True)
     columns = ['unique_id', 'ds', *range(1,PDT+1)]

@@ -27,7 +27,10 @@ def load_test_data(pred_length, context, quantiles, dataset, forecast_date):
         unit_num = 1
     else:
         unit_num = int("".join(unit_str))
-    freq_delta = pd.Timedelta(unit_num, unit)
+    if unit == 'M':
+        freq_delta = pd.DateOffset(months=unit_num)
+    else:
+        freq_delta = pd.Timedelta(unit_num, unit)
 
     
     if forecast_date == "":
@@ -35,7 +38,10 @@ def load_test_data(pred_length, context, quantiles, dataset, forecast_date):
     else:
         forecast_date = pd.Timestamp(forecast_date)
     end_date = max(df['ds'])
-    total_forecast_length = (end_date-forecast_date) // freq_delta
+    if unit == 'M':
+        total_forecast_length = (end_date.to_period(unit)-forecast_date.to_period(unit)).n // unit_num + 1
+    else:
+        total_forecast_length = (end_date-forecast_date) // freq_delta
 
     _, test_template = split(
         ds, date=pd.Period(forecast_date, freq=freq)
